@@ -1,0 +1,7 @@
+C:\Users\boukh\llama.cpp\build\bin\Release\llama-server.exe ^
+  -m C:\Users\boukh\models\mistral-7b-instruct-v0.2.Q4_K_M.gguf ^
+  -t 6 ^
+  --ctx-size 1024 ^
+  --batch-size 256 ^
+  --no-mmap ^
+  --port 8080
