@@ -1,20 +1,21 @@
 # voice_transcription/voice_module.py
 # ==================================
-# Module de transcription vocale (version stable)
+# Moteur de transcription vocale silencieux (API multimodale)
 
-import time
 import threading
+import time
 import speech_recognition as sr
 
 _recognizer = sr.Recognizer()
 _microphone = sr.Microphone()
 
-_last_text = ""
+_last_voice_text = None
 _voice_active = False
+_lock = threading.Lock()
 
 
 def _voice_loop():
-    global _last_text, _voice_active
+    global _last_voice_text, _voice_active
 
     with _microphone as source:
         _recognizer.adjust_for_ambient_noise(source)
@@ -29,20 +30,20 @@ def _voice_loop():
                     phrase_time_limit=4
                 )
 
-            _voice_active = True
             text = _recognizer.recognize_google(audio, language="fr-FR")
-            _last_text = text
-            print("[VOICE] Transcription :", text)
+
+            with _lock:
+                _last_voice_text = text
+                _voice_active = True
 
         except sr.WaitTimeoutError:
             _voice_active = False
         except sr.UnknownValueError:
             _voice_active = False
-        except Exception as e:
-            print("[VOICE ERROR]", e)
+        except Exception:
             _voice_active = False
 
-        time.sleep(0.2)
+        time.sleep(0.1)
 
 
 def start_voice_recognition():
@@ -55,7 +56,8 @@ def is_voice_active():
 
 
 def get_voice_text():
-    global _last_text
-    text = _last_text
-    _last_text = ""
+    global _last_voice_text
+    with _lock:
+        text = _last_voice_text
+        _last_voice_text = None
     return text
