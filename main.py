@@ -5,19 +5,17 @@
 from mode_manager.mode_manager import ModeManager
 from shared.protocol import InputMode
 from eye_tracking.eye_module import start_eye_tracking, get_eye_command
+from voice_transcription.voice_module import (
+    start_voice_recognition,
+    is_voice_active,
+    get_voice_text
+)
 
 
 # --------------------------------------------------
 # STUBS TEMPORAIRES (seront remplacés par les vrais)
 # --------------------------------------------------
 
-def is_voice_active():
-    # À remplacer par le module voice_transcription
-    return False
-
-
-def get_voice_text():
-    return ""
 
 
 def is_gesture_active():
@@ -43,6 +41,7 @@ def main_loop():
 
     # Démarrage du module eye-tracking (thread interne)
     start_eye_tracking()
+    start_voice_recognition()
 
     print("SmartVision Multimodal System started")
 
