@@ -141,3 +141,53 @@ class ImprovedEyeDetector:
         return "haut" if dy < 0 else "bas"
 
 eye_detector = ImprovedEyeDetector()
+# ============================================================
+# EYE TRACKING LOOP (SILENCIEUX)
+# ============================================================
+
+def eye_tracking_loop():
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+
+    print("[EYE] Eye tracking started")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            continue
+
+        frame = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        res = face_mesh.process(rgb)
+
+        if res.multi_face_landmarks:
+            lms = res.multi_face_landmarks[0].landmark
+            h, w = frame.shape[:2]
+
+            gaze = eye_detector.get_gaze(lms, w, h)
+            direction = eye_detector.get_direction(gaze)
+            blink = eye_detector.detect_blink(lms, w, h)
+
+            if blink and direction is not None:
+                if direction == "haut":
+                    _set_eye_command("Consultation demandée")
+                elif direction == "bas":
+                    _set_eye_command("Médicaments")
+                elif direction == "gauche":
+                    _set_eye_command("Besoin WC")
+                elif direction == "droite":
+                    _set_eye_command("Confort")
+                elif direction == "centre":
+                    _set_eye_command("Rien")
+
+                time.sleep(0.8)  # anti répétition
+
+        time.sleep(0.01)
+
+    cap.release()
+def start_eye_tracking():
+    t = threading.Thread(target=eye_tracking_loop, daemon=True)
+    t.start()
+
