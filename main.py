@@ -7,7 +7,6 @@ from shared.protocol import InputMode
 from eye_tracking.eye_module import start_eye_tracking, get_eye_command
 
 
-
 # --------------------------------------------------
 # STUBS TEMPORAIRES (seront remplacés par les vrais)
 # --------------------------------------------------
@@ -41,10 +40,14 @@ def avatar_react(intent):
 
 def main_loop():
     manager = ModeManager()
-    # Démarrage du module eye-tracking
+
+    # Démarrage du module eye-tracking (thread interne)
     start_eye_tracking()
 
     print("SmartVision Multimodal System started")
+
+    # 🔒 Mémoire de la dernière commande EYE (anti-répétition)
+    last_eye_content = None
 
     while True:
         voice_active = is_voice_active()
@@ -55,6 +58,8 @@ def main_loop():
             gesture_active=gesture_active
         )
 
+        content = ""
+
         if mode == InputMode.VOICE:
             content = get_voice_text()
 
@@ -64,9 +69,15 @@ def main_loop():
         elif mode == InputMode.EYE:
             content = get_eye_command()
 
-        else:
-            content = ""
+            # 🔐 Sécurité médicale :
+            # empêcher l'envoi répété de la même commande oculaire
+            if content == last_eye_content:
+                content = ""
 
+            if content:
+                last_eye_content = content
+
+        # Envoi vers l’avatar uniquement si une intention valide existe
         if content:
             intent = manager.build_intent(
                 mode=mode,
@@ -75,7 +86,7 @@ def main_loop():
             )
             avatar_react(intent)
 
-        # fréquence volontairement lente (sécurité médicale)
+        # ⏱️ Fréquence volontairement lente (sécurité médicale)
         import time
         time.sleep(0.5)
 
