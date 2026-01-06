@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Avatar LSF intelligent</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0c0f; color:#e6e8eb; }
+    header { padding:16px 20px; border-bottom:1px solid #1e232b; }
+    main { display:grid; grid-template-columns: 1fr 380px; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
+    .panel { background:#12151a; border:1px solid #1e232b; border-radius:14px; padding:12px; }
+    .model { height:580px; }
+    .caption { margin-top:8px; padding:10px; background:#0f1217; border:1px solid #2b313b; border-radius:10px; min-height:48px; }
+    .controls label { display:block; margin-top:10px; }
+    select, input[type="range"], button, input[type="text"] {
+      width:100%; padding:10px; border-radius:10px; border:1px solid #2b313b; background:#0f1217; color:#e6e8eb;
+    }
+    .row { display:flex; gap:8px; margin-top:8px; }
+    .row > * { flex:1; }
+    .chatlog { height:360px; overflow:auto; padding:8px; background:#0f1217; border:1px solid #2b313b; border-radius:10px; }
+    .msg { margin-bottom:10px; }
+    .msg.you { color:#cfe7ff; }
+    .msg.bot { color:#b3f5d6; }
+    code { background:#ffffff; padding:2px 6px; border-radius:6px; border:1px solid #2b313b; }
+    a { color:#7cc4ff; }
+    button:disabled,
+    input:disabled {
+      opacity:0.5;
+      cursor:not-allowed;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Avatar médical — LSF intelligent</h1>
+  <p style="color:#9aa4b2">
+    Place ce fichier <code>index.html</code> avec <code>avatar.glb</code> et le dossier <code>LSF/</code> (LSF/A.glb, LSF/B.glb, etc.).
+  </p>
+</header>
+
+<main>
+  <div class="panel">
+    <model-viewer id="avatar"
+      src="avatar.glb"
+      camera-controls
+      interaction-prompt="none"
+      class="model"
+      style="width:100%;height:100%;"
+      shadow-intensity="1"
+      exposure="0.9">
+    </model-viewer>
+
+    <!-- Panneau de contrôle manuel (optionnel) -->
+    <div class="row">
+      <div>
+        <label for="anim">Animation (manuelle)</label>
+        <select id="anim"></select>
+      </div>
+      <div>
+        <label for="speed">Vitesse</label>
+        <input id="speed" type="range" min="0.5" max="1.5" step="0.05" value="1.0"/>
+      </div>
+      <div>
+        <label for="loop">Boucle</label>
+        <select id="loop">
+          <option value="once">Une fois</option>
+          <option value="loop">En boucle</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="caption" class="caption" aria-live="polite">Sous-titre…</div>
+  </div>
+
+  <div class="panel controls">
+    <h3>Chat</h3>
+    <div class="chatlog" id="chatlog" aria-live="polite"></div>
+    <label for="input">Message patient / soignant</label>
+    <input id="input" type="text" placeholder="Ex.: BONJOUR"/>
+    <div class="row">
+      <button id="send">Envoyer</button>
+      <button id="mic">🎙️ Dictée</button>
+      <button id="clear">Effacer</button>
+    </div>
+
+    <label for="serverUrl">Serveur</label>
+    <input id="serverUrl" type="text" placeholder="http://localhost:3000"/>
+  </div>
+</main>
+
+<script>
+/* ======================= CONFIG GÉNÉRALE ======================= */
+
+let ws = null;
+let serverBase = "http://localhost:3000";
+
+// durée par défaut pour une lettre (en ms)
+const DEFAULT_LETTER_DURATION_MS = 1200;
+
+// Durée spécifique par lettre (à adapter à tes .glb)
+const LETTER_DELAYS = {
+  'A': 1900,
+  'B': 1900,
+  'C': 1900,
+  'D': 1900,
+  'E': 1000,
+  'F': 1300,
+  'G': 1400,
+  'H': 1200,
+  'I': 1900,
+  'J': 1300,
+  'K': 1200,
+  'L': 1900,
+  'M': 1900,
+  'N': 1900,
+  'O': 1200,
+  'P': 1300,
+  'Q': 1300,
+  'R': 1100,
+  'S': 1000,
+  'T': 1100,
+  'U': 1000,
+  'V': 1000,
+  'W': 1400,
+  'X': 1100,
+  'Y': 1300,
+  'Z': 1780
+};
+
+// dossier de base où sont stockées les lettres LSF (relative au index.html)
+const LETTER_BASE_PATH = "LSF";
+
+/* ======================= RÉFÉRENCES DOM ======================== */
+
+const mv        = document.getElementById('avatar');
+const animSel   = document.getElementById('anim');
+const speed     = document.getElementById('speed');
+const loopSel   = document.getElementById('loop');
+const caption   = document.getElementById('caption');
+const chatlog   = document.getElementById('chatlog');
+const input     = document.getElementById('input');
+const send      = document.getElementById('send');
+const mic       = document.getElementById('mic');
+const clearBtn  = document.getElementById('clear');
+const serverUrl = document.getElementById('serverUrl');
+
+/* ======================= CHAT UI ======================== */
+
+function logMsg(text, who='you'){
+  const div = document.createElement('div');
+  div.className = 'msg ' + who;
+  div.textContent = (who==='you'?'Vous: ':'Bot: ') + text;
+  chatlog.appendChild(div);
+  chatlog.scrollTop = chatlog.scrollHeight;
+}
+
+/* ======================= WEBSOCKET (OPTIONNEL) ======================== */
+
+function connectWS(){
+  try { if (ws) ws.close(); } catch(e){}
+  const url = (serverBase||"").replace(/^http/, "ws");
+  ws = new WebSocket(url);
+  ws.onopen   = ()=> console.log("WS connecté");
+  ws.onclose  = ()=> console.log("WS fermé");
+  ws.onmessage = (e)=> {
+    console.log("WS message:", e.data);
+  };
+}
+
+/* ======================= GESTION DES LETTRES LSF ======================== */
+
+function textToLetters(text) {
+  return (text || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^A-Z]/g,"")
+    .split("");
+}
+
+/**
+ * Joue une lettre :
+ *  - charge LSF/<LETTER>.glb
+ *  - joue l’animation UNE SEULE FOIS
+ *  - utilise un délai spécifique par lettre (LETTER_DELAYS) ou le délai par défaut
+ *  - gère le cas "même lettre répétée" (AA, BONN…) sans se bloquer
+ */
+function playLetter(letter) {
+  return new Promise((resolve) => {
+    const filePath = `${LETTER_BASE_PATH}/${letter}.glb`;
+    const delay = LETTER_DELAYS[letter] || DEFAULT_LETTER_DURATION_MS;
+    console.log(`Lecture lettre: ${letter} -> ${filePath} (delay=${delay}ms)`);
+
+    const startAnimation = () => {
+      mv.loop = false;
+      mv.animationLoop = false;
+
+      mv.currentTime = 0;
+      if (mv.play) {
+        mv.play();
+      } else {
+        mv.autoplay = true;
+      }
+
+      setTimeout(() => {
+        if (mv.pause) mv.pause();
+        resolve();
+      }, delay);
+    };
+
+    const currentSrc = mv.getAttribute("src");
+
+    // Si c'est la même lettre déjà chargée, on relance juste l'animation
+    if (currentSrc === filePath) {
+      startAnimation();
+      return;
+    }
+
+    const onLoad = () => {
+      mv.removeEventListener("load", onLoad);
+      startAnimation();
+    };
+
+    mv.addEventListener("load", onLoad);
+    mv.src = filePath;
+  });
+}
+
+/**
+ * Après la séquence de lettres, on revient à l’avatar neutre.
+ */
+function resetToAvatarNeutral() {
+  mv.src = "avatar.glb";
+  mv.autoplay = false;
+  mv.loop = false;
+  mv.animationLoop = false;
+  mv.animationName = null;
+  mv.currentTime = 0;
+}
+
+/* ====== Queue d’animation pour éviter les chevauchements de messages ====== */
+
+let spellQueue  = [];
+let isSpelling  = false;
+
+function setInputEnabled(enabled) {
+  input.disabled = !enabled;
+  send.disabled  = !enabled;
+}
+
+function queueSpellText(text) {
+  const letters = textToLetters(text);
+  if (!letters.length) {
+    console.warn("Aucune lettre valide dans le message:", text);
+    return;
+  }
+  spellQueue.push({ originalText: text, letters });
+  if (!isSpelling) {
+    runSpellQueue();
+  }
+}
+
+async function runSpellQueue() {
+  isSpelling = true;
+  setInputEnabled(false);
+
+  while (spellQueue.length) {
+    const { originalText, letters } = spellQueue.shift();
+
+    caption.textContent = originalText;
+
+    for (const letter of letters) {
+      await playLetter(letter);
+    }
+
+    resetToAvatarNeutral();
+  }
+
+  isSpelling = false;
+  setInputEnabled(true);
+}
+
+/* ======================= ANCIENS CONTRÔLES D'ANIMATION (OPTIONNELS) ======================== */
+
+function populateAnimList(){
+  animSel.innerHTML = '';
+}
+
+animSel.addEventListener('change', ()=>{
+  const letter = (animSel.value || "").trim().toUpperCase();
+  if (letter) {
+    queueSpellText(letter);
+  }
+});
+
+speed.addEventListener('input', ()=>{
+  mv.animationSpeed = parseFloat(speed.value);
+});
+
+loopSel.addEventListener('change', ()=>{
+  // ignoré, car on force toujours une seule lecture dans playLetter
+});
+
+/* ======================= ENVOI DU MESSAGE / CHAT ======================== */
+
+async function sendChat(){
+  const text = input.value.trim();
+  if(!text) return;
+
+  logMsg(text, 'you');
+  input.value = '';
+
+  queueSpellText(text);
+
+  try {
+    const res = await fetch(serverBase + "/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+
+    if (data.reply) {
+      logMsg(data.reply, 'bot');
+      // queueSpellText(data.reply); // si tu veux signer la réponse du bot
+    }
+
+    if (data.caption) {
+      caption.textContent = data.caption;
+    }
+  } catch(e){
+    console.error(e);
+    logMsg("(erreur serveur)", 'bot');
+  }
+}
+
+send.addEventListener('click', ()=>{
+  if (!isSpelling) {
+    sendChat();
+  }
+});
+input.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter' && !isSpelling) {
+    sendChat();
+  }
+});
+clearBtn.addEventListener('click', ()=> chatlog.innerHTML='');
+
+serverUrl.addEventListener('change', ()=>{
+  serverBase = serverUrl.value || "http://localhost:3000";
+  connectWS();
+});
+
+/* ======================= WEB SPEECH API (DICTÉE VOCALE) ======================== */
+
+let rec;
+mic.addEventListener('click', ()=>{
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    alert('Web Speech API non dispo');
+    return;
+  }
+  rec = new SR();
+  rec.lang = 'fr-FR';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.onresult = (e)=>{
+    input.value = e.results[0][0].transcript;
+  };
+  rec.start();
+});
+
+/* ======================= INIT ======================== */
+
+populateAnimList();
+serverUrl.value = serverBase;
+connectWS();
+resetToAvatarNeutral();
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Avatar LSF intelligent</title>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+<style>
+:root {
+  --bg-dark: #0b0c0f;
+  --panel-bg: #1a1d25;
+  --accent: #4fc3f7;
+  --text-light: #e6e8eb;
+  --text-muted: #9aa4b2;
+  --border: #2b313b;
+  --chat-bg: #12151a;
+  --chat-msg-you: #cfe7ff;
+  --chat-msg-bot: #b3f5d6;
+  --btn-hover: #1f6feb;
+}
+body {
+  margin:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(160deg,#0b0c0f 0%,#1c1f2a 100%);
+  color: var(--text-light);
+}
+header {
+  padding: 20px 24px; border-bottom:1px solid #1e232b; background: rgba(26,29,37,0.9); backdrop-filter: blur(6px);
+}
+header h1 { margin:0; font-weight:700; font-size:1.8rem; color:var(--accent); }
+header p { color: var(--text-muted); font-size:0.95rem; margin-top:4px; }
+
+main {
+  display:grid; grid-template-columns:1fr 380px; gap:20px; padding:20px; max-width:1200px; margin:0 auto;
+}
+
+.panel {
+  background: var(--panel-bg); border-radius:16px; padding:16px; border:1px solid var(--border);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+.panel:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,0.5); }
+
+.model {
+  height:580px; border-radius:14px; overflow:hidden; border:1px solid var(--border); box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+}
+
+.caption {
+  margin-top:10px; padding:12px; background: rgba(18,21,26,0.9); border:1px solid var(--border); border-radius:12px;
+  min-height:48px; font-weight:500; text-align:center; color:var(--accent); font-size:1.05rem; letter-spacing:0.8px;
+}
+
+.controls label { display:block; margin-top:12px; font-size:0.95rem; font-weight:500; }
+
+input, button {
+  width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background: rgba(18,21,26,0.9);
+  color: var(--text-light); font-family: inherit; transition: background 0.2s, transform 0.2s;
+}
+input:hover, button:hover { background: rgba(31,38,51,0.95); transform:translateY(-2px); }
+button { cursor:pointer; font-weight:600; letter-spacing:0.5px; background:var(--accent); color:#0b0c0f; }
+button:hover { background:var(--btn-hover); }
+
+.row { display:flex; gap:10px; margin-top:10px; }
+.row > * { flex:1; }
+
+.chatlog {
+  height:360px; overflow-y:auto; padding:12px; background:var(--chat-bg); border:1px solid var(--border);
+  border-radius:12px; font-family:'Courier New', monospace; font-size:0.92rem; line-height:1.3;
+  color: var(--text-light); box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+}
+
+.msg { margin-bottom:10px; }
+.msg.you { color: var(--chat-msg-you); }
+.msg.bot { color: var(--chat-msg-bot); }
+
+code { background: #1f2230; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
+a { color: var(--accent); text-decoration: underline; }
+button:disabled, input:disabled { opacity:0.5; cursor:not-allowed; }
+
+/* Scroll Anchor invisible */
+#scroll-anchor { height:50px; }
+</style>
+</head>
+
+<body>
+<header>
+<h1>Avatar médical</h1>
+</header>
+
+<!-- Anchor pour scroll -->
+<div id="scroll-anchor"></div>
+
+<main>
+<div class="panel">
+  <model-viewer id="avatar" src="avatar.glb" camera-controls interaction-prompt="none" class="model"
+    style="width:100%;height:100%;" shadow-intensity="1" exposure="0.9"></model-viewer>
+  <div id="caption" class="caption" aria-live="polite">Sous-titre…</div>
+</div>
+
+<div class="panel controls">
+  <h3>Chat</h3>
+  <div class="chatlog" id="chatlog" aria-live="polite"></div>
+  <label for="input">Message patient / soignant</label>
+  <input id="input" type="text" placeholder="Ex.: BONJOUR"/>
+  <div class="row">
+    <button id="send">Envoyer</button>
+    <button id="mic">🎙️ Dictée</button>
+    <button id="clear">Effacer</button>
+  </div>
+</div>
+</main>
+
+<script>
+const mv = document.getElementById('avatar');
+const caption = document.getElementById('caption');
+const chatlog = document.getElementById('chatlog');
+const input = document.getElementById('input');
+const send = document.getElementById('send');
+const mic = document.getElementById('mic');
+const clearBtn = document.getElementById('clear');
+
+const DEFAULT_LETTER_DURATION_MS = 1200;
+const LETTER_DELAYS = {
+'A':1900,'B':1900,'C':1900,'D':1900,'E':1000,'F':1300,'G':1400,'H':1200,
+'I':1900,'J':1300,'K':1200,'L':1900,'M':1900,'N':1900,'O':1200,'P':1300,
+'Q':1300,'R':1100,'S':1000,'T':1100,'U':1000,'V':1000,'W':1400,'X':1100,
+'Y':1300,'Z':1780};
+const LETTER_BASE_PATH = "LSF";
+
+function logMsg(text, who='you'){
+  const div=document.createElement('div'); div.className='msg '+who; div.textContent=(who==='you'?'Vous: ':'Bot: ')+text;
+  chatlog.appendChild(div); chatlog.scrollTop=chatlog.scrollHeight;
+}
+
+function textToLetters(text){
+  return (text||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Z]/g,"").split("");
+}
+
+function playLetter(letter){
+  return new Promise(resolve=>{
+    const filePath=`${LETTER_BASE_PATH}/${letter}.glb`;
+    const delay=LETTER_DELAYS[letter]||DEFAULT_LETTER_DURATION_MS;
+    const startAnim=()=>{ mv.loop=false; mv.animationLoop=false; mv.currentTime=0;
+      if(mv.play) mv.play(); else mv.autoplay=true;
+      setTimeout(()=>{ if(mv.pause) mv.pause(); resolve(); },delay);
+    };
+    if(mv.getAttribute("src")===filePath){ startAnim(); return; }
+    const onLoad=()=>{ mv.removeEventListener("load",onLoad); startAnim(); };
+    mv.addEventListener("load",onLoad); mv.src=filePath;
+  });
+}
+
+function resetToAvatarNeutral(){ mv.src="avatar.glb"; mv.autoplay=false; mv.loop=false; mv.animationLoop=false; mv.currentTime=0; }
+
+let spellQueue=[], isSpelling=false;
+function setInputEnabled(enabled){ input.disabled=!enabled; send.disabled=!enabled; }
+
+function queueSpellText(text){
+  const letters=textToLetters(text); if(!letters.length) return;
+  spellQueue.push({originalText:text,letters});
+  if(!isSpelling) runSpellQueue();
+}
+
+async function runSpellQueue(){
+  isSpelling=true; setInputEnabled(false);
+  while(spellQueue.length){
+    const {originalText,letters}=spellQueue.shift();
+    caption.textContent=originalText;
+    for(const letter of letters) await playLetter(letter);
+    resetToAvatarNeutral();
+  }
+  isSpelling=false; setInputEnabled(true);
+}
+
+async function sendChat(){
+  const text=input.value.trim(); if(!text) return;
+  logMsg(text,'you'); input.value='';
+  queueSpellText(text);
+}
+send.addEventListener('click',()=>{ if(!isSpelling) sendChat(); });
+input.addEventListener('keydown',e=>{ if(e.key==='Enter' && !isSpelling) sendChat(); });
+
+clearBtn.addEventListener('click',()=>{
+  chatlog.innerHTML='';
+  // Scroll vers le haut pour corriger la position de l'avatar
+  const anchor = document.getElementById('scroll-anchor');
+  if(anchor){ anchor.scrollIntoView({behavior:'smooth', block:'start'}); }
+});
+
+/* Dictée vocale */
+let rec;
+mic.addEventListener('click',()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ alert('Web Speech API non dispo'); return; }
+  rec=new SR(); rec.lang='fr-FR'; rec.interimResults=false; rec.maxAlternatives=1;
+  rec.onresult=e=>{ input.value=e.results[0][0].transcript; };
+  rec.start();
+});
+
+/* INIT */
+resetToAvatarNeutral();
+</script>
+</body>
+</html>

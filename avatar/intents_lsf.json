@@ -1,0 +1,72 @@
+[
+  {
+    "intent": "greeting",
+    "examples": ["bonjour", "salut", "bonsoir"],
+    "reply": "Bonjour, comment puis-je vous aider ?",
+    "clip": "HELLO_LSF",
+    "non_manuals": ["SMILE_SOFT"]
+  },
+  {
+    "intent": "triage_pain_where",
+    "examples": ["j'ai mal", "où avez-vous mal", "douleur", "mal ici"],
+    "reply": "Où avez-vous mal ?",
+    "clip": "PAIN_WHERE_LSF",
+    "non_manuals": ["NMM_QUESTION"]
+  },
+  {
+    "intent": "triage_pain_scale",
+    "examples": ["combien", "échelle", "note la douleur", "0 à 10"],
+    "reply": "Sur une échelle de 0 à 10, quelle est l'intensité ?",
+    "clip": "PAIN_SCALE_LSF",
+    "non_manuals": ["NMM_QUESTION"]
+  },
+  {
+    "intent": "triage_breathe",
+    "examples": ["je respire mal", "difficulté à respirer", "souffle court"],
+    "reply": "Avez-vous de la difficulté à respirer ?",
+    "clip": "BREATH_DIFFICULT_LSF",
+    "non_manuals": ["NMM_CONCERN"]
+  },
+  {
+    "intent": "exam_open_mouth",
+    "examples": ["ouvrez la bouche", "regarder gorge", "bouche ouverte"],
+    "reply": "Ouvrez la bouche s'il vous plaît.",
+    "clip": "OPEN_MOUTH_LSF",
+    "non_manuals": []
+  },
+  {
+    "intent": "exam_breathe_deep",
+    "examples": ["respirez profondément", "grande inspiration", "inspirez"],
+    "reply": "Respirez profondément.",
+    "clip": "BREATHE_DEEP_LSF",
+    "non_manuals": []
+  },
+  {
+    "intent": "allergy_check",
+    "examples": ["allergie", "allergies", "réaction allergique"],
+    "reply": "Avez-vous des allergies ?",
+    "clip": "ALLERGY_LSF",
+    "non_manuals": ["NMM_QUESTION"]
+  },
+  {
+    "intent": "medication_check",
+    "examples": ["médicaments", "avez-vous pris", "traitement"],
+    "reply": "Avez-vous pris des médicaments ?",
+    "clip": "MEDICINE_TAKE_LSF",
+    "non_manuals": ["NMM_QUESTION"]
+  },
+  {
+    "intent": "thanks",
+    "examples": ["merci", "au revoir", "bonne journée"],
+    "reply": "Merci.",
+    "clip": "THANK_YOU_LSF",
+    "non_manuals": ["SMILE_SOFT"]
+  },
+  {
+    "intent": "fallback",
+    "examples": [],
+    "reply": "Un instant s’il vous plaît.",
+    "clip": "WAIT_PLEASE_LSF",
+    "non_manuals": []
+  }
+]
